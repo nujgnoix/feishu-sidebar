@@ -1,0 +1,35 @@
+{
+  "app_id": "your_app_id",
+  "app_secret": "your_app_secret",
+  "name": "Hermes Agent 执行逻辑",
+  "description": "查看 Hermes Agent 机器人的执行逻辑",
+  "icon": "https://example.com/icon.png",
+  "features": {
+    "message_shortcut": {
+      "enabled": true,
+      "shortcuts": [
+        {
+          "name": "查看执行逻辑",
+          "description": "查看该消息的执行逻辑",
+          "callback_url": "http://localhost:3000",
+          "icon": "https://example.com/shortcut_icon.png"
+        }
+      ]
+    },
+    "sidebar": {
+      "enabled": true,
+      "app_url": "http://localhost:3000",
+      "height": 600
+    }
+  },
+  "permissions": [
+    {
+      "name": "im:message",
+      "description": "获取消息内容和上下文"
+    },
+    {
+      "name": "chat:write",
+      "description": "发送消息"
+    }
+  ]
+}
