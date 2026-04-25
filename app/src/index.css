@@ -236,6 +236,16 @@ body {
   flex-shrink: 0;
 }
 
+.sender-avatar.avatar-bot {
+  background: #dbeafe;
+  font-size: 13px;
+}
+
+.sender-avatar.avatar-user {
+  background: #f3f4f6;
+  font-size: 13px;
+}
+
 .sender-name {
   font-weight: 600;
   font-size: 13px;
@@ -464,6 +474,18 @@ body {
 .sub-agent-detail {
   background: #f5f3ff;
   border-color: rgba(124, 58, 237, 0.25);
+}
+
+.sub-agent-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.sub-agent-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .detail-title {

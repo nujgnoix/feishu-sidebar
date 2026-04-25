@@ -871,10 +871,12 @@ function App() {
                   onClick={() => handleMessageClick(msg)}
                 >
                   <div className="message-sender">
-                    <span className="sender-avatar">
-                      {msg.sender?.name?.charAt(0) || '?'}
+                    <span className={`sender-avatar ${msg.sender?.sender_type === 'app' ? 'avatar-bot' : 'avatar-user'}`}>
+                      {msg.sender?.sender_type === 'app' ? '🤖' : '👤'}
                     </span>
-                    <span className="sender-name">{msg.sender?.name || '未知'}</span>
+                    <span className="sender-name">
+                      {msg.sender?.sender_type === 'app' ? 'Hermes' : '用户'}
+                    </span>
                     <span className="message-type-badge">{msg.messageType}</span>
                   </div>
                   <div className="message-text">{text}</div>
@@ -979,16 +981,18 @@ function App() {
                             </>
                           )}
 
-                          {/* sub_agent: 显示 log-content + 可展开的 sub-agent-detail */}
+                          {/* sub_agent: 子任务，显示目标 + 可展开结果 */}
                           {item.type === 'sub_agent' && (
                             <>
-                              <div className="log-content">{item.content}</div>
-                              {item.subAgentName && (
+                              <div className="log-content sub-agent-content">
+                                <span className="sub-agent-icon">🤖</span>
+                                <span>{item.content}</span>
+                              </div>
+                              {item.result && (
                                 <ToolDetailCard
-                                  title={item.subAgentName}
-                                  params={item.params}
+                                  title="子任务结果"
+                                  params={null}
                                   result={item.result}
-                                  isSubAgent
                                 />
                               )}
                             </>

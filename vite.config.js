@@ -168,26 +168,46 @@ function createExecutionLogMiddleware(tokenManager, hermesHome) {
     }
   }
 
-  // 在所有飞书会话中，通过消息时间匹配对应的 user 消息行
+  // 在所有飞书会话中，通过消息时间和内容匹配对应的 user 消息行
   // 返回 { sessionId, rowId, timestamp, content } 或 null
-  function findMatchingUserMessage(db, userId, feishuCreateTime) {
+  function findMatchingUserMessage(db, userId, feishuCreateTime, feishuContent) {
     if (!feishuCreateTime) return null
     let createTimeSec = Number(feishuCreateTime)
     if (createTimeSec > 1e12) createTimeSec = createTimeSec / 1000
 
-    // 在该用户的所有飞书 session 中搜索匹配的 user 消息
-    // 窗口 ±300 秒（5分钟，覆盖 Hermes 处理延迟）
-    const row = db.prepare(`
-      SELECT m.id as row_id, m.session_id, m.timestamp, m.content
-      FROM messages m
-      JOIN sessions s ON m.session_id = s.id
-      WHERE s.source = 'feishu' AND s.user_id = ?
-        AND m.role = 'user'
-        AND m.timestamp > ? AND m.timestamp < ?
-      ORDER BY ABS(m.timestamp - ?)
-      LIMIT 1
-    `).get(userId, createTimeSec - 300, createTimeSec + 300, createTimeSec)
-    return row || null
+    // 解析飞书消息文本
+    let feishuText = ''
+    if (feishuContent) {
+      try {
+        const parsed = typeof feishuContent === 'string' ? JSON.parse(feishuContent) : feishuContent
+        feishuText = parsed.text || parsed.content || ''
+      } catch {}
+    }
+
+    // 内容匹配：在所有飞书 session 中搜索，无时间上限，只设下限排除旧消息
+    if (feishuText) {
+      const contentCandidates = db.prepare(`
+        SELECT m.id as row_id, m.session_id, m.timestamp, m.content
+        FROM messages m
+        JOIN sessions s ON m.session_id = s.id
+        WHERE s.source = 'feishu' AND s.user_id = ?
+          AND m.role = 'user'
+          AND m.timestamp >= ?
+        ORDER BY ABS(m.timestamp - ?)
+        LIMIT 20
+      `).all(userId, createTimeSec - 60, createTimeSec)
+
+      for (const c of contentCandidates) {
+        const dbText = (c.content || '').trim()
+        if (dbText === feishuText || dbText.startsWith(feishuText) || feishuText.startsWith(dbText)) {
+          return c
+        }
+      }
+    }
+
+    // 内容匹配失败 → 数据库中可能还没有这条消息（Hermes 尚未处理完）
+    // 直接返回 null，前端会显示"暂无执行日志"
+    return null
   }
 
   // 从 messages 表提取指定轮次的执行日志
@@ -254,10 +274,14 @@ function createExecutionLogMiddleware(tokenManager, hermesHome) {
             let args = {}
             try { args = JSON.parse(fn.arguments || '{}') } catch {}
 
+            // 区分子 agent（delegate_task）和普通工具
+            const isSubAgent = fn.name === 'delegate_task'
             log.push({
               id: logId++,
-              type: 'tool',
-              content: `调用工具 ${fn.name}`,
+              type: isSubAgent ? 'sub_agent' : 'tool',
+              content: isSubAgent
+                ? `子任务: ${(args.goal || '').substring(0, 100)}`
+                : `调用工具 ${fn.name}`,
               toolName: fn.name,
               params: args,
               timestamp: msg.timestamp,
@@ -298,9 +322,9 @@ function createExecutionLogMiddleware(tokenManager, hermesHome) {
           resultPreview = String(msg.content).substring(0, 500)
         }
 
-        // 更新上一个 tool 调用条目的 result
+        // 更新上一个 tool/sub_agent 调用条目的 result
         for (let j = log.length - 1; j >= 0; j--) {
-          if (log[j].type === 'tool' && !log[j].result) {
+          if ((log[j].type === 'tool' || log[j].type === 'sub_agent') && !log[j].result) {
             log[j].result = resultPreview
             log[j].toolName = log[j].toolName || toolName
             break
@@ -357,7 +381,7 @@ function createExecutionLogMiddleware(tokenManager, hermesHome) {
       }
 
       // 2. 在所有飞书 session 中按时间匹配 user 消息
-      const match = findMatchingUserMessage(db, msgInfo.senderId, msgInfo.createTime)
+      const match = findMatchingUserMessage(db, msgInfo.senderId, msgInfo.createTime, msgInfo.content)
       if (!match) {
         console.log(`[execution-log] 未找到匹配消息: userId=${msgInfo.senderId}, createTime=${msgInfo.createTime}`)
         res.writeHead(200, { 'Content-Type': 'application/json' })
